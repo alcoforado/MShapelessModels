@@ -1,0 +1,24 @@
+{
+  "name": "mshapelessmodels",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alcoforado/MShapelessModels.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alcoforado/MShapelessModels/issues"
+  },
+  "homepage": "https://github.com/alcoforado/MShapelessModels#readme",
+  "devDependencies": {
+    "typescript": "^3.9.5",
+    "mocha":"7.2.0",
+    "chai":"4.2.0"
+  }
+}
