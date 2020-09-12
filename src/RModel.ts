@@ -111,7 +111,7 @@ export interface IRModel {
   member(fieldName:string):IRModel
   error():string;
   c_array():Array<MFormNode>
-  setAsArray(a:Array<MFormNode>)
+  setAsArray(a?:Array<MFormNode>)
 
 }
 
@@ -371,9 +371,10 @@ export class MFormNode implements IRModel{
       return Array.isArray(value)  ? PropertyType.Array : PropertyType.Object;
     }
   }
-  public setAsArray(a:any[])
+  public setAsArray(a?:Array<MFormNode>)
   {
-    if (this._data.isUndefined || this._data.isArray)
+    //check if this node is undefined or is an Array already.
+    if (this._data.isUndefined() || this._data.isArray())
     {
       this._data.bus.emit("change", {
         sourceNode:this,
