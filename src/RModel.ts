@@ -47,7 +47,7 @@ export class PropertyInfo {
 
   static parse(pathPart:string):PropertyInfo
   {
-    var intExp= /[0-9]+$/g;
+    var intExp= /^[0-9]+$/g;
     if (pathPart.match(intExp) !=null)
     {
         var i:number = parseInt(pathPart);
@@ -282,7 +282,7 @@ export class MFormNode implements IRModel{
       if (this._data.children[field.getFieldId()])
       {
         var child=this._data.children[field.getFieldId()]
-        if (child._data.field.type != field.type)
+        if (field.type && child._data.field.type != field.type)
           throw `Expect children ${child._data.field.getField()} to be ${child._data.field.type}, but it is ${field.type}`
         return this._data.children[field.getFieldId()];
       }
@@ -291,8 +291,7 @@ export class MFormNode implements IRModel{
         var child:MFormNode = new MFormNode(this._data.bus);
         child._data.field=field.clone();
         child._data.parent=this;
-        this._data.bus.createProperty(this,field.getName(),child);
-        this._data.bus.createProperty(this._data,field.getName(),child);
+        this._data.bus.createProperty(this._data.children,field.getName(),child);
         return child;
       }
     
@@ -345,9 +344,9 @@ export class MFormNode implements IRModel{
   }
   
   public value():any {
-      if (this.hasChildren())
+      if (this._data.field.type!= PropertyType.Primitive)
       {
-        throw `Can't set value at Node ${this.getStringPath()}, because it is not a final value, use the "member" method to go further in the object tree`; 
+        throw `Can't get value at Node ${this.getStringPath()}, because it is not a final value, use the "member" method to go further in the object tree`; 
       }
       return this._data.primitiveValue;
   }
@@ -356,12 +355,22 @@ export class MFormNode implements IRModel{
   {
       if (this._data.isUndefined() || this._data.isArray())
       {
-        return   this._data.array==null ? [] : [...this._data.array];
+        return   this._data.array==null ? [] : this._data.array;
       }
       else 
         throw `Error the node ${this.getStringPath()} is not an array` 
   }
 
+  private static getType(value: any): PropertyType {
+    if (value == null)
+      return null;
+    if (typeof value != "object")
+      return PropertyType.Primitive;
+    else 
+    {
+      return Array.isArray(value)  ? PropertyType.Array : PropertyType.Object;
+    }
+  }
   public setAsArray(a:any[])
   {
     if (this._data.isUndefined || this._data.isArray)
@@ -416,25 +425,29 @@ export class MFormNode implements IRModel{
   
   
   
-  public static createMFormTree(bus:Vue,obj:any):MFormNode
+  public static createMFormTree(bus:IFramework,obj:any):MFormNode
   {
     var objectsTraversed:any[]=[];
     var createNodeAux = (parent:MFormNode,field:string|number,obj:any)=>{
 
 
       var n = new MFormNode(bus)
-      n.field.setField(field);
+      n._data.field.setField(field);
 
 
-      n.parent=parent;
+      n._data.parent=parent;
       if (parent!=null)
-        parent.children[field]=n;
-      
+      {
+        if (parent._data.field.type == PropertyType.Object)
+          parent._data.children[field]=n;
+        else 
+          parent._data.array.push(n);
+      }
       if (obj!=null)
       {
-        n.field.type = MFormNode.getType(obj)
+        n._data.field.type = MFormNode.getType(obj)
         
-        if (n.field.type == PropertyType.Object)
+        if (n._data.field.type == PropertyType.Object)
         {
           if (objectsTraversed.indexOf(obj)!=-1) throw 'object is recursive';
 
@@ -445,18 +458,19 @@ export class MFormNode implements IRModel{
             createNodeAux(n,k,obj[k])
           }
         }
-        else if (n.field.type == PropertyType.Array)
+        else if (n._data.field.type == PropertyType.Array)
         {
           if (objectsTraversed.indexOf(obj)!=-1) throw 'object is recursive';
           objectsTraversed.push(obj);
           var a = obj as any[];
+          n._data.array=[];
           for (var i=0;i<a.length;i++)
           {
             createNodeAux(n,i,a[i]);
           }
         }
         else {
-          n.primitiveValue=obj;
+          n._data.primitiveValue=obj;
         }
 
       }
