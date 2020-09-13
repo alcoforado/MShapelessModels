@@ -47,7 +47,7 @@ export class PropertyInfo {
 
   static parse(pathPart:string):PropertyInfo
   {
-    var intExp= /^[0-9]+$/g;
+    var intExp= /^-?[0-9]+$/g;
     if (pathPart.match(intExp) !=null)
     {
         var i:number = parseInt(pathPart);
@@ -92,17 +92,14 @@ export interface IMFormChangeEvent {
 }
 
 export interface IFramework {
+  push(array: MFormNode[], result: MFormNode);
     createProperty(dst:any,fieldName:string,propertyValue:any);
     emit(name:string,value:any);
 }
 
 
 
-export class RModelArray extends Array<IRModel> 
-{
 
-
-}
 
 export interface IRModel {
   change(value:any):void
@@ -111,8 +108,8 @@ export interface IRModel {
   member(fieldName:string):IRModel
   error():string;
   c_array():Array<MFormNode>
-  setAsArray(a?:Array<MFormNode>)
-
+  setAsArray(a?:Array<any>)
+  push():MFormNode;
 }
 
 class InnerData {
@@ -131,13 +128,13 @@ class InnerData {
     isUndefined():boolean {return this.field.type==null}
     isArray():boolean {return this.field.type == PropertyType.Array}
     isPrimitive():boolean {return this.field.type == PropertyType.Primitive}
-    constructor(pMasterComponent:IFramework)
+    constructor(frm:IFramework,parent?:MFormNode)
     {
         this.field=new PropertyInfo('',null);
         this.isMFormNode=true;
-        this.parent=null;
+        this.parent=parent ? parent : null;
         this.children={};
-        this.bus=pMasterComponent;
+        this.bus=frm;
       }
 
 
@@ -148,15 +145,10 @@ export class MFormNode implements IRModel{
     _data: InnerData;
   
 
-    
-
-
-
-
   
-    constructor (bus:IFramework)
+    constructor (bus:IFramework,parent?:MFormNode)
     {
-        this._data = new InnerData(bus);
+        this._data = new InnerData(bus,parent);
     }
 
 
@@ -250,15 +242,26 @@ export class MFormNode implements IRModel{
     getOrCreateField(field: PropertyInfo): MFormNode {
     
     
-
+      var bus = this._data.bus;
     var _data = this._data;
     //if it is an index the node must be an array and the index must exist.
     //Creawte an index on demand may destroy the continuity of the indices
     if (field.isIndex()) 
     {
+        if (this._data.isUndefined())
+        {
+          this._data.field.type = PropertyType.Array;
+          this._data.array=[];
+        }
         if (this._data.isArray())
         {
-            if (field.getIndex() < this._data.array.length)
+            if (field.getIndex() == -1) //push element
+            {
+              var result = new MFormNode(this._data.bus,this);
+              bus.push(this._data.array,result);
+              return result;
+            }
+            else if (field.getIndex() < this._data.array.length)
             {
                 return this._data.array[field.getIndex()];
             }
@@ -291,7 +294,7 @@ export class MFormNode implements IRModel{
         var child:MFormNode = new MFormNode(this._data.bus);
         child._data.field=field.clone();
         child._data.parent=this;
-        this._data.bus.createProperty(this._data.children,field.getName(),child);
+        bus.createProperty(this._data.children,field.getName(),child);
         return child;
       }
     
@@ -313,9 +316,17 @@ export class MFormNode implements IRModel{
     {
         var arr= ev.value as any[];
         var nodeArray =  arr.map(el=> {
+          var result:MFormNode;
             if (InnerData.isNode(el))
-                return el;
-            return MFormNode.createMFormTree(this._data.bus,el);
+            {
+              result=el as MFormNode;
+            }
+            else 
+            {
+              result=MFormNode.createPrimitiveNode(this._data.bus,el,cNode);
+            }
+            result._data.parent=cNode;
+            return result;
         })
         cNode._data.field.type=PropertyType.Array;
         cNode._data.array=nodeArray;
@@ -371,14 +382,15 @@ export class MFormNode implements IRModel{
       return Array.isArray(value)  ? PropertyType.Array : PropertyType.Object;
     }
   }
-  public setAsArray(a?:Array<MFormNode>)
+  public setAsArray(a?:any)
   {
     //check if this node is undefined or is an Array already.
     if (this._data.isUndefined() || this._data.isArray())
     {
+      
       this._data.bus.emit("change", {
         sourceNode:this,
-        value:a,
+        value:a ? a : [],
         error:null,
         convertToArrayOfNodes:true
       } as IMFormChangeEvent)
@@ -420,11 +432,28 @@ export class MFormNode implements IRModel{
     }
   }
 
+  public push():MFormNode
+  {
+    if (this._data.isUndefined() || this._data.isArray())
+    {
+        var result = new MFormNode(this._data.bus);
+        result._data.parent=this;
+        result._data.field = new PropertyInfo(-1,null)
+        return result;
+    }
+    throw `Can't push a node to a non Array at ${this.getStringPath()}`
+  }
+
   public buildObject() {
       
   }
   
-  
+  public static createPrimitiveNode(bus:IFramework,obj:any,parent:MFormNode)
+  {
+    var result = new MFormNode(bus,parent);
+    result.setPrimitiveValue(obj);
+    return result;
+  }
   
   public static createMFormTree(bus:IFramework,obj:any):MFormNode
   {
@@ -477,8 +506,45 @@ export class MFormNode implements IRModel{
       }
       return n;
     }
-
     return createNodeAux(null,'',obj);
   }  
+
+
+  public static toPoco(obj:MFormNode):any
+  {
+    
+    var toPocoAux= function(obj:MFormNode) {
+      let result=null;
+      if (obj._data.field.type == PropertyType.Object)
+      {
+        result={};
+        var children = obj._data.children;
+        var keys = Object.keys(children);
+        keys.forEach(key=>{
+          var node = children[key] as MFormNode;
+          result[node._data.field.name]=toPocoAux(node);
+        })
+   
+      }
+      if (obj._data.field.type == PropertyType.Array)
+      {
+        result=[];
+        var a = obj.c_array();
+        a.forEach(x=>{
+          var r = toPocoAux(x);
+          result.push(r);
+        })
+      }
+      if (obj._data.field.type == PropertyType.Primitive)
+      {
+        result=obj.value();
+      }
+      return result;
+
+    };
+    return toPocoAux(obj);
+  }  
 }
+
+
 
