@@ -1,5 +1,5 @@
 {
-  "name": "mshapelessmodels",
+  "name": "m-prop-models",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alcoforado/MShapelessModels.git"
+    "url": "git+https://github.com/alcoforado/m-prop-models.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/alcoforado/MShapelessModels/issues"
+    "url": "https://github.com/alcoforado/m-prop-models/issues"
   },
-  "homepage": "https://github.com/alcoforado/MShapelessModels#readme",
+  "homepage": "https://github.com/alcoforado/m-prop-models#readme",
   "devDependencies": {
     "typescript": "^3.9.5",
     "mocha": "7.2.0",
