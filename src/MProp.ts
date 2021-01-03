@@ -9,13 +9,13 @@ export enum PropertyType {
 
 
 export class PropertyInfo {
-   name:string;
-  type:PropertyType;
-   index:number;
+   name?:string;
+   type?:PropertyType;
+   index?:number;
 
-  constructor(field:string|number,type:PropertyType)
+  constructor(field:string|number,type?:PropertyType)
   {
-    this.type=type;
+    if (type) this.type=type;
     this.setField(field);
   }
 
@@ -24,21 +24,22 @@ export class PropertyInfo {
   }
   getFieldId():string|number
   {
-    if (this.name!=null) return this.name;
-    return this.index;
+    if (this.name) return this.name;
+    if (this.index) return this.index;
+    throw "invalid field id";
   }
 
   getField():string {
-    if (this.name!=null)
+    if (this.name)
       return this.name
-   if (this.index!=null)
+   if (this.index)
     return this.index.toString()
    else
     return ''
   }
 
   getIndex():number {
-      if (this.index!=null)
+      if (this.index)
         return this.index;
       else
         throw "field is not an index" 
@@ -51,35 +52,35 @@ export class PropertyInfo {
     if (pathPart.match(intExp) !=null)
     {
         var i:number = parseInt(pathPart);
-        return new PropertyInfo(i,null);
+        return new PropertyInfo(i);
     }
     else 
     {
-        return new PropertyInfo(pathPart,null);
+        return new PropertyInfo(pathPart);
     }
 
   }
 
   getName():string {
-    if (!this.isName())
-        throw "Field is an index not a name"  ;
+    if (this.name)
+      return this.name;
+    throw "Field is an index not a name"  ;
     
-    return this.name;
   }
 
-  isIndex():boolean {return this.index!=null};
-  isName():boolean {return this.name!=null};
+  isIndex():boolean {return this.index ? true: false};
+  isName():boolean {return this.name ? true: false};
   setField(field:string|number)
     {
       if (typeof field == "number")
         {
           this.index=field;
-          this.name=null;
+          
         }
       else 
       {
         this.name=field;
-        this.index=null;
+        
       }      
     }
 }
@@ -92,9 +93,9 @@ export interface IMFormChangeEvent {
 }
 
 export interface IFramework {
-  push(array: MFormNode[], result: MFormNode);
-    createProperty(dst:any,fieldName:string,propertyValue:any);
-    emit(name:string,value:any);
+  push(array: MFormNode[], result: MFormNode):void;
+    createProperty(dst:any,fieldName:string,propertyValue:any):void;
+    emit(name:string,value:any):void;
 }
 
 
@@ -108,19 +109,19 @@ export interface IRModel {
   member(fieldName:string):IRModel
   error():string;
   c_array():Array<MFormNode>
-  setAsArray(a?:Array<any>)
+  setAsArray(a?:Array<any>):void
   push():MFormNode;
 }
 
 class InnerData {
     field:PropertyInfo
-    parent:MFormNode;
-    _error:string=null;
+    parent:MFormNode|null;
+    _error:string="";
     bus:IFramework;
     isMFormNode:boolean = true;
     children:{[key:string]:MFormNode}
     primitiveValue:any=null;
-    array:Array<MFormNode>=null;
+    array:Array<MFormNode>|null=null;
     
     static isNode(obj:any):boolean{
         return (obj && obj._data && obj._data.isMFormNode)
@@ -128,9 +129,15 @@ class InnerData {
     isUndefined():boolean {return this.field.type==null}
     isArray():boolean {return this.field.type == PropertyType.Array}
     isPrimitive():boolean {return this.field.type == PropertyType.Primitive}
+    
+    getParent():MFormNode {
+      if (!this.parent) throw "Node has no parent" 
+      return this.parent;
+    }
+    
     constructor(frm:IFramework,parent?:MFormNode)
     {
-        this.field=new PropertyInfo('',null);
+        this.field=new PropertyInfo('');
         this.isMFormNode=true;
         this.parent=parent ? parent : null;
         this.children={};
@@ -170,7 +177,7 @@ export class MFormNode implements IRModel{
    private createUndefinedProperty(field: string|number): MFormNode {
     
     var result=new MFormNode(this._data.bus);
-    result._data.field = new PropertyInfo(field,null)
+    result._data.field = new PropertyInfo(field)
     result._data.parent=this;
     result._data.children={};
     return result;
@@ -202,7 +209,7 @@ export class MFormNode implements IRModel{
    getRoot():MFormNode
   {
     var it:MFormNode=this;
-    while(!it.isRoot())
+    while(it._data.parent != null)
     {
       it=it._data.parent;
     }
@@ -211,11 +218,11 @@ export class MFormNode implements IRModel{
    getPath():PropertyInfo[] 
   {
     var result:PropertyInfo[]= [];
-    var it:MFormNode = this;
-    while (it)
+    var it:MFormNode= this;
+    while (!it.isRoot())
     {
       result.push(it._data.field.clone());
-      it=it._data.parent;
+      it=it._data.getParent();
     }
     return result.reverse();
   }
@@ -255,20 +262,22 @@ export class MFormNode implements IRModel{
         }
         if (this._data.isArray())
         {
-            if (field.getIndex() == -1) //push element
-            {
-              var result = new MFormNode(this._data.bus,this);
-              bus.push(this._data.array,result);
-              return result;
-            }
-            else if (field.getIndex() < this._data.array.length)
-            {
-                return this._data.array[field.getIndex()];
-            }
-            else 
-            {
-                throw `Index ${field.getIndex()} out of range for array at ${this.getStringPath()}`
-            }
+          if (this._data.array ==null)
+            this._data.array = [];
+          if (field.getIndex() == -1) //push element
+          {
+            var result = new MFormNode(this._data.bus,this);
+            bus.push(this._data.array,result);
+            return result;
+          }
+          else if (field.getIndex() < this._data.array.length)
+          {
+              return this._data.array[field.getIndex()];
+          }
+          else 
+          {
+            throw `Index ${field.getIndex()} out of range for array at ${this.getStringPath()}`
+          }
         } 
         else
             throw `Node ${this.getStringPath()} is not an Array`
@@ -347,7 +356,7 @@ export class MFormNode implements IRModel{
         this._data.bus.emit("change",{
             sourceNode: this,
             value:value,
-            error:null
+            error:""
         } as IMFormChangeEvent)
     }
     else 
@@ -374,7 +383,7 @@ export class MFormNode implements IRModel{
 
   private static getType(value: any): PropertyType {
     if (value == null)
-      return null;
+      throw "type of a null value is undefined"
     if (typeof value != "object")
       return PropertyType.Primitive;
     else 
@@ -391,7 +400,7 @@ export class MFormNode implements IRModel{
       this._data.bus.emit("change", {
         sourceNode:this,
         value:a ? a : [],
-        error:null,
+        error:"",
         convertToArrayOfNodes:true
       } as IMFormChangeEvent)
     }
@@ -413,7 +422,7 @@ export class MFormNode implements IRModel{
 
   public member(fieldName:string):IRModel
   {
-    if (this._data.field.type != null)
+    if (this._data.field.type)
     {
       if (this._data.field.type !== PropertyType.Object)
       {
@@ -438,7 +447,7 @@ export class MFormNode implements IRModel{
     {
         var result = new MFormNode(this._data.bus);
         result._data.parent=this;
-        result._data.field = new PropertyInfo(-1,null)
+        result._data.field = new PropertyInfo(-1)
         return result;
     }
     throw `Can't push a node to a non Array at ${this.getStringPath()}`
@@ -458,7 +467,7 @@ export class MFormNode implements IRModel{
   public static createMFormTree(bus:IFramework,obj:any):MFormNode
   {
     var objectsTraversed:any[]=[];
-    var createNodeAux = (parent:MFormNode,field:string|number,obj:any)=>{
+    var createNodeAux = (parent:MFormNode|null,field:string|number,obj:any)=>{
 
 
       var n = new MFormNode(bus)
@@ -470,8 +479,12 @@ export class MFormNode implements IRModel{
       {
         if (parent._data.field.type == PropertyType.Object)
           parent._data.children[field]=n;
-        else 
-          parent._data.array.push(n);
+        else {
+          if (parent._data.array !=null)
+          {
+            parent._data.array.push(n);
+          }
+        }
       }
       if (obj!=null)
       {
@@ -514,7 +527,7 @@ export class MFormNode implements IRModel{
   {
     
     var toPocoAux= function(obj:MFormNode) {
-      let result=null;
+      let result:any=null;
       if (obj._data.field.type == PropertyType.Object)
       {
         result={};
@@ -522,7 +535,7 @@ export class MFormNode implements IRModel{
         var keys = Object.keys(children);
         keys.forEach(key=>{
           var node = children[key] as MFormNode;
-          result[node._data.field.name]=toPocoAux(node);
+          result[node._data.field.getName()]=toPocoAux(node);
         })
    
       }

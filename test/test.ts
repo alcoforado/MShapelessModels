@@ -1,6 +1,6 @@
 import { assert, expect } from 'chai';
 import * as chai from 'chai';
-import { MFormNode, IFramework } from '../src/RModel'
+import { MFormNode, IFramework } from '../src/MProp'
 import 'mocha'
 
 var should = chai.should();
@@ -10,13 +10,15 @@ class PlainObjects implements IFramework {
         array.push(result);
     }
 
-    constructor(public rootObject: MFormNode) {
+    constructor(public rootObject: MFormNode|null) {
 
     }
     createProperty(dst: any, fieldName: string, propertyValue: any) {
         dst[fieldName] = propertyValue;
     }
     emit(name: string, value: any) {
+        if (this.rootObject == null)
+            throw "root object is null"
         this.rootObject.onModelChange(value)
     }
 
